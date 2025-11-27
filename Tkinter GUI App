@@ -1,0 +1,194 @@
+import tkinter as tk
+from tkinter import ttk, messagebox
+from datetime import datetime
+import matplotlib.pyplot as plt
+
+# ===== IMPORT YOUR BACKEND FUNCTIONS =====
+from NewsArticleSearch import (
+    get_search_news_results, 
+    country_list, country_dict, 
+    language_list, language_dict
+)
+
+class NewsApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("News Article Search App")
+        self.root.geometry("900x700")
+
+        # Offset used for pagination
+        self.offset = 0
+        self.current_query = ""
+        self.current_lang = None
+        self.current_country = None
+        self.total_articles = 0
+
+        # ========= TOP INPUT SECTION =========
+        tk.Label(root, text="Search Query:").pack(anchor="w", padx=10)
+        self.query_entry = tk.Entry(root, width=50)
+        self.query_entry.pack(padx=10, pady=5)
+
+        tk.Label(root, text="Select Language:").pack(anchor="w", padx=10)
+        self.lang_var = tk.StringVar()
+        self.lang_menu = ttk.Combobox(root, textvariable=self.lang_var, values=language_list)
+        self.lang_menu.pack(padx=10)
+
+        tk.Label(root, text="Select Country:").pack(anchor="w", padx=10)
+        self.country_var = tk.StringVar()
+        self.country_menu = ttk.Combobox(root, textvariable=self.country_var, values=country_list)
+        self.country_menu.pack(padx=10)
+
+        # ========= BUTTONS =========
+        tk.Button(root, text="Search", command=self.search_news).pack(pady=10)
+        tk.Button(root, text="Generate Search Trend", command=self.generate_trend).pack()
+
+        # ========= LABEL FOR TOTAL RESULTS =========
+        self.total_label = tk.Label(root, text="Articles found: 0")
+        self.total_label.pack(pady=10)
+
+        # ========= ARTICLE DISPLAY FRAME =========
+        self.results_frame = tk.Frame(root)
+        self.results_frame.pack(fill="both", expand=True)
+
+        # 5 article slots
+        self.article_labels = []
+        for i in range(5):
+            lbl = tk.Label(self.results_frame, text="", justify="left", anchor="w", wraplength=800)
+            lbl.pack(anchor="w", pady=5)
+            self.article_labels.append(lbl)
+
+        # ========= PAGINATION =========
+        nav_frame = tk.Frame(root)
+        nav_frame.pack(pady=10)
+
+        tk.Button(nav_frame, text="<< First", command=self.go_first).grid(row=0, column=0, padx=5)
+        tk.Button(nav_frame, text="< Prev", command=self.go_prev).grid(row=0, column=1, padx=5)
+        tk.Button(nav_frame, text="Next >", command=self.go_next).grid(row=0, column=2, padx=5)
+        tk.Button(nav_frame, text="Last >>", command=self.go_last).grid(row=0, column=3, padx=5)
+
+        self.page_label = tk.Label(root, text="Page 0")
+        self.page_label.pack()
+
+    # ===============================================================
+
+    def search_news(self):
+        self.offset = 0
+        self.current_query = self.query_entry.get().strip()
+
+        lang = self.lang_var.get().title()
+        country = self.country_var.get().title()
+
+        self.current_lang = language_dict.get(lang, None)
+        self.current_country = country_dict.get(country, None)
+
+        data = get_search_news_results(self.current_query, self.current_lang, self.current_country, offset=str(self.offset))
+
+        if not data:
+            messagebox.showerror("Error", "No data found.")
+            return
+
+        self.total_articles = data["available"]
+        self.total_label.config(text=f"Articles found: {self.total_articles}")
+
+        self.display_articles(data)
+        self.update_page_label()
+
+    # ===============================================================
+
+    def display_articles(self, data):
+        for lbl in self.article_labels:
+            lbl.config(text="")
+
+        for i, entry in enumerate(data["news"]):
+            text_preview = entry["text"][:280].replace("\n", " ") + "..."
+            lang_name = next((name for name, code in language_dict.items() if code == entry["language"].lower()), "")
+            country_name = next((name for name, code in country_dict.items() if code == entry["source_country"].lower()), "")
+
+            content = (
+                f"Title: {entry['title']}\n"
+                f"Author: {entry['author']}\n"
+                f"Published: {entry['publish_date']}\n"
+                f"Language: {lang_name} | Country: {country_name}\n"
+                f"Text: {text_preview}\n"
+                f"URL: {entry['url']}"
+            )
+
+            self.article_labels[i].config(text=content)
+
+    # ===============================================================
+
+    def go_next(self):
+        if self.offset + 5 >= self.total_articles:
+            return
+        self.offset += 5
+        data = get_search_news_results(self.current_query, self.current_lang, self.current_country, offset=str(self.offset))
+        self.display_articles(data)
+        self.update_page_label()
+
+    def go_prev(self):
+        if self.offset == 0:
+            return
+        self.offset -= 5
+        data = get_search_news_results(self.current_query, self.current_lang, self.current_country, offset=str(self.offset))
+        self.display_articles(data)
+        self.update_page_label()
+
+    def go_first(self):
+        self.offset = 0
+        data = get_search_news_results(self.current_query, self.current_lang, self.current_country, offset=str(self.offset))
+        self.display_articles(data)
+        self.update_page_label()
+
+    def go_last(self):
+        last_page_offset = (self.total_articles // 5) * 5
+        self.offset = last_page_offset
+        data = get_search_news_results(self.current_query, self.current_lang, self.current_country, offset=str(self.offset))
+        self.display_articles(data)
+        self.update_page_label()
+
+    def update_page_label(self):
+        page = self.offset // 5 + 1
+        max_page = (self.total_articles // 5) + 1
+        self.page_label.config(text=f"Page {page}/{max_page}")
+
+    # ===============================================================
+
+    def generate_trend(self):
+        if not self.current_query:
+            messagebox.showinfo("Error", "Search first before generating trend.")
+            return
+
+        all_dates = []
+
+        # fetch all articles up to 100 (modify if needed)
+        for off in range(0, 100, 5):
+            data = get_search_news_results(self.current_query, self.current_lang, self.current_country, offset=str(off))
+            if not data:
+                break
+            for article in data["news"]:
+                try:
+                    dt = datetime.fromisoformat(article["publish_date"].replace("Z",""))
+                    all_dates.append(dt.date())
+                except:
+                    pass
+
+        # count occurrences
+        date_count = {}
+        for d in all_dates:
+            date_count[d] = date_count.get(d, 0) + 1
+
+        # plot
+        dates = sorted(date_count.keys())
+        counts = [date_count[d] for d in dates]
+
+        plt.plot(dates, counts)
+        plt.title(f"Search Trend for '{self.current_query}'")
+        plt.xlabel("Date")
+        plt.ylabel("Number of Articles")
+        plt.show()
+
+
+# ===== RUN THE APP =====
+root = tk.Tk()
+app = NewsApp(root)
+root.mainloop()
