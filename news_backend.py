@@ -9,7 +9,7 @@ country_dict = {country.name.title(): country.alpha2.lower() for country in coun
 language_dict = {lang.name.title(): lang.part1 for lang in iso639.ALL_LANGUAGES if lang.part1}
 
 # === API DETAILS ===
-API_KEY = "0223db48f9b941f3a13b6ffa842607aa"
+API_KEY = "47fe05de29944f4dae1a1702cd37b38b"
 BASE_URL = "https://api.worldnewsapi.com/search-news"
 
 def get_search_news_results(query: str, language=None, country=None, offset="0"):
